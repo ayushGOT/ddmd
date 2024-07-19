@@ -58,15 +58,7 @@ class ddmd_run(object):
         self.gpu_ids = GPUManager().request(num_gpus=n_runs)
         logger.info(f"Available {len(self.gpu_ids)} GPUs: {self.gpu_ids}")
         # if not enough GPUs, reconf the workflow
-        if len(self.gpu_ids) == 2: 
-            logger.info("only two GPUs detected, going to be overlay" \
-                "simulation and ML training/inferences...")
-            logger.info(f"New configuration: {self.n_sims} simulations, ")
-            logger.info(f"1 training, and 1 inference node, on 2 GPUs. ")
-            self.n_sims = 2
-            self.gpu_ids = self.gpu_ids * 2
-
-        elif len(self.gpu_ids) < n_runs:
+        if len(self.gpu_ids) < n_runs: 
             n_gpus = len(self.gpu_ids)
             self.n_sims = self.n_sims + n_gpus - n_runs
             logger.info("Not enough GPUs avaible for all the runs, and "\
@@ -81,14 +73,41 @@ class ddmd_run(object):
         md_setup = self.ddmd_setup['md_setup']
         # correcting file path
         input_files = ['pdb_file', 'top_file', 'checkpoint']
+        iter_conf = []
         for input in input_files: 
-            if input in md_setup and md_setup[input]: 
-                if not os.path.isabs(md_setup[input]): 
+            if input in md_setup and md_setup[input]:
+                if not os.path.isabs(md_setup[input]):
                     md_setup[input] = os.path.join(self.yml_dir, md_setup[input])
                     logger.debug(f"updated entry{input} to {md_setup[input]}.")
+                if '*' in md_setup[input]: 
+                    md_setup[input] = glob.glob(md_setup[input])
+                    iter_conf.append(input)
+
         self.md_path = create_path(dir_type='md', time_stamp=False)
-        md_yml = f"{self.md_path}/md.yml"
-        dict_to_yaml(md_setup, md_yml)
+        
+        md_ymls= []
+        if iter_conf == []: 
+            md_yml = f"{self.md_path}/md.yml"
+            dict_to_yaml(md_setup, md_yml)
+            md_ymls.append(md_yml)
+        elif len(iter_conf) > 1: 
+            iter_conf_list = zip(*[md_setup[input] for input in iter_conf])
+            for i, conf in enumerate(iter_conf_list):
+                md_setup_copy = md_setup.copy()
+                for conf_name, conf_val in zip(iter_conf, conf): 
+                    md_setup_copy[conf_name] = conf_val
+                md_yml = f"{self.md_path}/md_{i}.yml"
+                dict_to_yaml(md_setup_copy, md_yml)
+                md_ymls.append(md_yml)
+        else: 
+            iter_conf_list = md_setup[iter_conf[0]]
+            for i, conf in enumerate(iter_conf_list):
+                md_setup_copy = md_setup.copy()
+                md_setup_copy[iter_conf[0]] = conf        
+                md_yml = f"{self.md_path}/md_{i}.yml"
+                dict_to_yaml(md_setup_copy, md_yml)
+                md_ymls.append(md_yml)
+
 
         if self.md_only: 
             self.ml_path = None
@@ -113,7 +132,7 @@ class ddmd_run(object):
         self.infer_path = create_path(dir_type='infer', time_stamp=False)
         infer_yml = f"{self.infer_path}/infer.yml"
         dict_to_yaml(infer_setup, infer_yml)
-        return md_yml, ml_yml, infer_yml
+        return md_ymls, ml_yml, infer_yml
 
     def submit_job(self, 
             yml_file, work_path,
@@ -125,7 +144,7 @@ class ddmd_run(object):
         if type_ind >= 0: 
             output_file = f"{output_file}_{type_ind}"
         # get gpu ids for current job 
-        gpu_ids = [self.gpu_ids.pop(0) for _ in range(n_gpus)]
+        gpu_ids = [self.gpu_ids.pop() for _ in range(n_gpus)]
         run = Run(
             cmd_line=run_cmd,
             gpu_ids=gpu_ids,
@@ -137,12 +156,15 @@ class ddmd_run(object):
         
     def run(self): 
         "create and submit ddmd jobs "
-        md_yml, ml_yml, infer_yml = self.build_tasks()
+        md_ymls, ml_yml, infer_yml = self.build_tasks()
         runs = []
         # md
         for i in range(self.n_sims): 
-            md_run = self.submit_job(md_yml, self.md_path, n_gpus=1, 
-                    job_type='md', type_ind=i)
+            md_yml = md_ymls.pop()
+            ind = int(os.path.basename(md_yml)[:-4].split('_')[1])
+            md_run = self.submit_job(
+                    md_yml, self.md_path, n_gpus=1, 
+                    job_type='md', type_ind=ind)
             runs.append(md_run)
             # avoid racing during dir creation
             # time.sleep(1)
