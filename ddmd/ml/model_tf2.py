@@ -145,7 +145,7 @@ class CVAE(object):
         self.eps_mean = eps_mean
         self.eps_std = eps_std
         self.image_size = image_size
-
+        
         # define input layer
         if K.image_data_format() == "channels_first":
             self.input = Input(shape=(channels, image_size[0], image_size[1]))
