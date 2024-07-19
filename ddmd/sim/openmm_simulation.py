@@ -13,7 +13,7 @@ except:
 
 # from .openmm_reporter import ContactMapReporter
 from ddmd.utils import build_logger, touch_file, write_pdb_frame
-from ddmd.utils import yml_base, missing_hydrogen
+from ddmd.utils import yml_base
 from ddmd.utils import create_path, get_dir_base
 
 logger = build_logger()
@@ -190,9 +190,10 @@ class Simulate(yml_base):
             self.top.topology, self.system, integrator, platform, properties)
         self.simulation = simulation
 
-    def minimizeEnergy(self):
+    def minimize_Energy(self,level=0):
         self.simulation.context.setPositions(self.top.positions)
-        self.simulation.minimizeEnergy()
+        if level ==0:        # only minimize for the very first IC
+            self.simulation.minimizeEnergy()
 
     def add_reporters(self):
         report_freq = int(self.report_time / self.dt)
@@ -208,7 +209,7 @@ class Simulate(yml_base):
         self.simulation.reporters.append(
             app.CheckpointReporter('checkpnt.chk', report_freq))
 
-    def run_sim(self, path='./'):
+    def run_sim(self, path='./',level=0):
         if not os.path.exists(path):
             os.makedirs(path)
 
@@ -217,7 +218,7 @@ class Simulate(yml_base):
         if self.checkpoint:
             self.simulation.loadCheckpoint(self.checkpoint)
         else:
-            self.minimizeEnergy()
+            self.minimize_Energy(level)
 
         os.chdir(path)
         self.add_reporters()
@@ -237,7 +238,7 @@ class Simulate(yml_base):
         omm_path = create_path(sys_label=path_label)
         logger.info(f"Starting simulation at {omm_path}")
         self.dump_yaml(f"{omm_path}/setting.yml")
-        self.run_sim(omm_path)
+        self.run_sim(omm_path,level)
         # touch done
         new_pdb = f"{omm_path}/new_pdb"
         if os.path.exists(new_pdb):
