@@ -13,7 +13,7 @@ except:
 
 # from .openmm_reporter import ContactMapReporter
 from ddmd.utils import build_logger, touch_file, write_pdb_frame
-from ddmd.utils import yml_base
+from ddmd.utils import yml_base, missing_hydrogen
 from ddmd.utils import create_path, get_dir_base
 
 logger = build_logger()
