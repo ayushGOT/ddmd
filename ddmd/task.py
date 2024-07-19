@@ -86,7 +86,7 @@ class Run:
         return retcode
 
     def kill(self): 
-        os.killpg(os.getpgid(self.process.pid), 9)
+        os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
 
 
 
