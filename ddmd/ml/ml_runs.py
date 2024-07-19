@@ -51,7 +51,12 @@ class ml_base(yml_base):
         md_path,
     ) -> None:
         super().__init__()
-        self.pdb_file = os.path.abspath(pdb_file)
+        print(pdb_file)
+        if type(pdb_file) is list:                         # if multiple ICs
+            pdb_file = (pdb_file)[0]
+            self.pdb_file = os.path.abspath(pdb_file)
+        else:                                       # only 1 IC
+            self.pdb_file = os.path.abspath(pdb_file)
         self.md_path = md_path
 
     def get_numberofFrames(self):
@@ -74,7 +79,7 @@ class ml_base(yml_base):
         else:
             dcd_files = sorted(glob.glob(f"{self.md_path}/md_run_*/*.dcd"))
 
-        logger.info(f"Collecting cm for CVAE.")
+        logger.info(f"Collecting cm for CVAE. Atom sel={atom_sel}")
         cm_list = []
         for dcd in tqdm(dcd_files):
             try:
@@ -119,8 +124,10 @@ class ml_base(yml_base):
         input_kwargs, kwargs = separate_kwargs(self.get_contact_maps, kwargs)
         padding = self.get_padding(strides)
         cvae_input = self.get_vae_input(padding=padding, **input_kwargs)
+        
         image_size = cvae_input.shape[1:-1]
         channel = cvae_input.shape[-1]
+        
         cvae = CVAE(
             image_size,
             channel,
@@ -205,7 +212,7 @@ def cm_to_cvae(cm_data, padding=2):
 
     # reshape matrix to 4d tensor
     cvae_input = cm_data_full.reshape(cm_data_full.shape + (1,))
-
+    
     return cvae_input
 
 
